@@ -1,16 +1,17 @@
+import os
 from flask import Flask, render_template
 from img_detection import analyze_image
 from img_detection import index
 from db_models import db, Plant
+from dotenv import load_dotenv
 
-class Config:
-    SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://root:mysqlweather0101!@localhost:3306/testdb'
-    SQLALCHEMY_TRACK_MODIFICATIONS = False
+# .env 파일 로드
+load_dotenv()
 
 app = Flask(__name__)
-app.config.from_object(Config)
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = os.getenv('SQLALCHEMY_TRACK_MODIFICATIONS')
 db.init_app(app)
-
 
 # 라우트 등록
 app.add_url_rule('/analyze', 'analyze_image', analyze_image, methods=['POST'])
