@@ -73,7 +73,7 @@ def get_all_image_urls_from_bucket(bucket_name):
         return []
 
 # 이미지 분석 함수
-def analyze_image(image):
+def process_image(image):
     # 이미지를 640x640 크기로 변환
     img = image.resize((640, 640))
     img = img.convert('RGB')
@@ -96,7 +96,7 @@ def analyze_all_images_in_bucket(bucket_name):
         # 이미지 다운로드
         image = download_image_from_storage(image_url)
         if image is not None:
-            result = analyze_image(image)
+            result = process_image(image)
             print(f"Image URL: {image_url}")
             print(f"Analysis Result: {result}")
             print("---")
@@ -133,10 +133,11 @@ def get_plant_name(result):
     return "Unknown"
 
 def save_result(plant_name, image_url):
-    # 결과를 DB에 저장
-    plant = Plant(plt_name=plant_name, plt_img=image_url)
-    db.session.add(plant)
-    db.session.commit()
+    pass
+    # # 결과를 DB에 저장
+    # plant = Plant(plt_name=plant_name, plt_img=image_url)
+    # db.session.add(plant)
+    # db.session.commit()
 
 @app.route('/analyze', methods=['POST'])
 def analyze_image():
@@ -161,9 +162,9 @@ def analyze_image():
     # 분석 결과를 JSON 형태로 변환
     result = result_to_json(image_to_base64(img), results)
 
-    # 결과를 DB에 저장
-    plant_name = get_plant_name(result)
-    save_result(plant_name, image_url)
+    # # 결과를 DB에 저장
+    # plant_name = get_plant_name(result)
+    # save_result(plant_name, image_url)
 
     return result
 
