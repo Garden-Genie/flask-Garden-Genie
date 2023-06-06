@@ -1,13 +1,14 @@
-from PIL import Image
 import os
-from io import BytesIO
 import base64
 import json
-from google.cloud import storage
+from PIL import Image
 import torch
-from db_models import Plant, db
+from io import BytesIO
+from google.cloud import storage
+from db_models import Plant, db, User
 from dotenv import load_dotenv
-from flask import Flask, request, render_template, jsonify
+from flask import Flask, render_template
+from flask import current_app
 
 load_dotenv()
 
@@ -43,30 +44,17 @@ def result_to_json(image, results):
     unique_labels = set()  # 레이블 중복 제거
     labels = []
     if len(results.xyxy[0]) == 0:
-        result_dict = {"image": image, "label": "No object detected"}
+        result_dict = {"image": image, "name": "No object detected"}  # "label"을 "name"으로 변경
     else:
-        result_dict = {"image": image, "label": ""}
+        result_dict = {"image": image, "name": ""}
         for result in results.xyxy[0]:
             label = class_names[int(result[5])]
             if label not in unique_labels:
                 labels.append(label)
                 unique_labels.add(label)
         if labels:
-            result_dict["label"] = labels[0]
+            result_dict["name"] = labels[0]  # "label"을 "name"으로 변경
     return json.dumps(result_dict)
-
-# def result_to_json(image, results):
-#     unique_labels = set() # 레이블 중복 제거
-#     if len(results.xyxy[0]) == 0:
-#         result_dict = {"image": image, "results": [{"label": "No object detected"}]}
-#     else:
-#         result_dict = {"image": image, "results": []}
-#         for result in results.xyxy[0]:
-#             label = class_names[int(result[5])]
-#             if label not in unique_labels:
-#                 result_dict["results"].append({"label": label})
-#                 unique_labels.add(label)
-#     return json.dumps(result_dict)
 
 # 버킷에 있는 모든 이미지의 URL 가져오기
 def get_all_image_urls_from_bucket(bucket_name):
@@ -93,61 +81,6 @@ def get_all_image_urls_from_bucket(bucket_name):
         print("Failed to get image URLs from bucket:", str(e))
         return []
 
-# 분석 결과에서 식물 이름 추출
-def get_plant_name(result):
-    data = json.loads(result)
-    label = data.get('label')
-    if label is not None:
-        return label
-    return None
-
-
-def save_result(plant_name):
-    with app.app_context():
-        plant = Plant(plt_name=plant_name)
-        db.session.add(plant)
-        db.session.commit()
-
-
-# 이미지 분석 함수
-def analyze_image(image):
-    # 이미지를 640x640 크기로 변환
-    img = image.resize((640, 640))
-    img = img.convert('RGB')
-
-    # 이미지 분석
-    results = model(img)
-
-    # 분석 결과를 JSON 형태로 변환
-    result = result_to_json(image_to_base64(img), results)
-
-    # 식물 이름 추출
-    plant_name = get_plant_name(result)
-
-    # 결과를 DB에 저장
-    save_result(plant_name)
-
-    return result
-
-# 버킷에 있는 모든 이미지 분석
-def analyze_all_images_in_bucket(bucket_name):
-
-    # 버킷에 있는 모든 이미지의 URL 가져오기
-    image_urls = get_all_image_urls_from_bucket(bucket_name)
-    # 이미지 분석 및 처리
-    for image_url in image_urls:
-
-        # 이미지 다운로드
-        image = download_image_from_storage(image_url)
-        if image is not None:
-            # 이미지 분석
-            result = analyze_image(image)
-            print(f"Analysis Result: {json.loads(result)['label']}")
-            print("--------------------------")
-
-
-
-
 # 이미지 다운로드 함수
 def download_image_from_storage(image_url):
     try:
@@ -168,16 +101,80 @@ def download_image_from_storage(image_url):
         print("Failed to download image from storage:", str(e))
         return None
 
+# 분석 결과에서 식물 이름 추출
+def get_plant_name(result):
+    data = json.loads(result)
+    name = data.get('name')  # "label"을 "name"으로 변경
+    if name is not None:
+        return name
+    return None
+
+# 이미지 분석 함수
+def analyze_image(image):
+    # 이미지를 640x640 크기로 변환
+    img = image.resize((640, 640))
+    img = img.convert('RGB')
+
+    # 이미지 분석
+    results = model(img)
+
+    # 분석 결과를 JSON 형태로 변환
+    result = result_to_json(image_to_base64(img), results)
+
+    # 식물 이름 추출
+    plant_name = get_plant_name(result)
+    print("Plant Name:", plant_name)
+
+    return plant_name
 
 # 버킷에 있는 모든 이미지 분석
-analyze_all_images_in_bucket(bucket_name)
+def analyze_all_images_in_bucket(bucket_name):
+    # 버킷에 있는 모든 이미지의 URL 가져오기
+    image_urls = get_all_image_urls_from_bucket(bucket_name)
 
+    # 사용자 ID 가져오기
+    with app.app_context():
+        user_ids = [str(user.user_id) for user in User.query.all()]  # 사용자 ID를 문자열로 변환
+
+    # 이미지 분석 및 처리
+    for i, image_url in enumerate(image_urls):
+        # 이미지 다운로드
+        image = download_image_from_storage(image_url)
+        if image is not None:
+            # 이미지 분석
+            plant_name = analyze_image(image)
+
+            # 사용자별로 결과 저장 및 출력
+            if i < len(user_ids):
+                user_id = user_ids[i]
+            else:
+                user_id = "No object detected"
+
+            if plant_name is None:
+                plant_name = "No object detected"
+
+            save_result(plant_name, image_url, user_id)
+            print(f"Analysis Result for User {user_id}: {plant_name}")
+            print("-------------------------------------------")
+
+def save_result(plant_name, image_url, user_id):
+    with app.app_context():
+        user = User.query.filter_by(user_id=user_id).first()
+        if user:
+            plant = Plant(plt_name=plant_name, plt_img=image_url, user_id=user_id)
+            db.session.add(plant)
+            db.session.commit()
+        else:
+            print(f"User ID '{user_id}' does not exist in the database.")
+
+
+# 버킷에 있는 모든 이미지 분석
+with app.app_context():
+    analyze_all_images_in_bucket(bucket_name)
 
 @app.route('/', methods=['GET'])
 def index():
 
     # 버킷에 있는 모든 이미지 URL 가져오기
     image_urls = get_all_image_urls_from_bucket(bucket_name)
-
     return render_template('test.html', image_urls=image_urls)
-
