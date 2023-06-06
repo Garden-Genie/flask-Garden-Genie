@@ -14,7 +14,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = os.getenv('SQLALCHEMY_TRACK_MODIF
 db.init_app(app)
 
 # 라우트 등록
-app.add_url_rule('/analyze', 'analyze_image', analyze_image, methods=['POST'])
+# app.add_url_rule('/analyze', 'analyze_image', analyze_image, methods=['POST'])
 app.add_url_rule('/', 'index', index)
 
 if __name__ == '__main__':
