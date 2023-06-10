@@ -7,7 +7,9 @@ from google.cloud import storage
 import torch
 from db_models import Plant, db
 from dotenv import load_dotenv
-from flask import Flask, request, render_template, jsonify
+from flask import Flask, request, render_template, jsonify, redirect, url_for
+from flask_jwt_extended import JWTManager, jwt_required, create_access_token, get_jwt_identity
+
 
 load_dotenv()
 
@@ -43,30 +45,17 @@ def result_to_json(image, results):
     unique_labels = set()  # 레이블 중복 제거
     labels = []
     if len(results.xyxy[0]) == 0:
-        result_dict = {"image": image, "label": "No object detected"}
+        result_dict = {"image": image, "name": "No object detected"}  # "label"을 "name"으로 변경
     else:
-        result_dict = {"image": image, "label": ""}
+        result_dict = {"image": image, "name": ""}
         for result in results.xyxy[0]:
             label = class_names[int(result[5])]
             if label not in unique_labels:
                 labels.append(label)
                 unique_labels.add(label)
         if labels:
-            result_dict["label"] = labels[0]
+            result_dict["name"] = labels[0]  # "label"을 "name"으로 변경
     return json.dumps(result_dict)
-
-# def result_to_json(image, results):
-#     unique_labels = set() # 레이블 중복 제거
-#     if len(results.xyxy[0]) == 0:
-#         result_dict = {"image": image, "results": [{"label": "No object detected"}]}
-#     else:
-#         result_dict = {"image": image, "results": []}
-#         for result in results.xyxy[0]:
-#             label = class_names[int(result[5])]
-#             if label not in unique_labels:
-#                 result_dict["results"].append({"label": label})
-#                 unique_labels.add(label)
-#     return json.dumps(result_dict)
 
 # 버킷에 있는 모든 이미지의 URL 가져오기
 def get_all_image_urls_from_bucket(bucket_name):
@@ -93,61 +82,6 @@ def get_all_image_urls_from_bucket(bucket_name):
         print("Failed to get image URLs from bucket:", str(e))
         return []
 
-# 분석 결과에서 식물 이름 추출
-def get_plant_name(result):
-    data = json.loads(result)
-    label = data.get('label')
-    if label is not None:
-        return label
-    return None
-
-
-def save_result(plant_name):
-    with app.app_context():
-        plant = Plant(plt_name=plant_name)
-        db.session.add(plant)
-        db.session.commit()
-
-
-# 이미지 분석 함수
-def analyze_image(image):
-    # 이미지를 640x640 크기로 변환
-    img = image.resize((640, 640))
-    img = img.convert('RGB')
-
-    # 이미지 분석
-    results = model(img)
-
-    # 분석 결과를 JSON 형태로 변환
-    result = result_to_json(image_to_base64(img), results)
-
-    # 식물 이름 추출
-    plant_name = get_plant_name(result)
-
-    # 결과를 DB에 저장
-    save_result(plant_name)
-
-    return result
-
-# 버킷에 있는 모든 이미지 분석
-def analyze_all_images_in_bucket(bucket_name):
-
-    # 버킷에 있는 모든 이미지의 URL 가져오기
-    image_urls = get_all_image_urls_from_bucket(bucket_name)
-    # 이미지 분석 및 처리
-    for image_url in image_urls:
-
-        # 이미지 다운로드
-        image = download_image_from_storage(image_url)
-        if image is not None:
-            # 이미지 분석
-            result = analyze_image(image)
-            print(f"Analysis Result: {json.loads(result)['label']}")
-            print("--------------------------")
-
-
-
-
 # 이미지 다운로드 함수
 def download_image_from_storage(image_url):
     try:
@@ -168,16 +102,110 @@ def download_image_from_storage(image_url):
         print("Failed to download image from storage:", str(e))
         return None
 
+# 분석 결과에서 식물 이름 추출
+def get_plant_name(result):
+    data = json.loads(result)
+    name = data.get('name')  # "label"을 "name"으로 변경
+    if name is not None:
+        return name
+    return None
 
-# 버킷에 있는 모든 이미지 분석
-analyze_all_images_in_bucket(bucket_name)
+@jwt_required()
+def save_result(plant_name, plt_img, user_id):
+    user_id = get_jwt_identity()  # 토큰에 포함된 사용자 아이디 가져오기
+
+    # 식물 정보와 사용자 아이디를 저장하는 코드 작성
+    if plant_name is not None:
+        new_plant = Plant(plt_name=plant_name, plt_img=plt_img, user_id=user_id)
+        db.session.add(new_plant)
+        db.session.commit()
+        return {'message': 'Result saved successfully'}
+    else:
+        return {'message': 'Plant name is required'}, 400
 
 
-@app.route('/', methods=['GET'])
+@jwt_required()
+@app.route('/analyze', methods=['POST'])
+def analyze_image():
+    user_id = get_jwt_identity()
+    image_url = request.json.get('image_url')
+    plt_img = request.json.get('plt_img', '')
+
+    # 이미지 다운로드
+    image = download_image_from_storage(image_url)
+    if image is not None:
+        # 이미지를 640x640 크기로 변환
+        resized_image = image.resize((640, 640))
+        resized_image = resized_image.convert('RGB')
+
+        # 이미지 분석
+        results = model(resized_image)
+
+        # 분석 결과를 JSON 형태로 변환
+        result = result_to_json(image_to_base64(resized_image), results)
+
+        # 식물 이름 추출
+        plant_name = get_plant_name(result)
+        print(f"Plant Name: {plant_name} (User ID: {user_id})")
+
+        # 결과 저장
+        save_result(plant_name=plant_name, plt_img=plt_img, user_id=user_id)
+
+        response = {
+            "message": "Image analyzed and result saved successfully",
+            "plant_name": plant_name,
+            "user_id": user_id
+        }
+
+        return jsonify(response), 200
+
+### html ###
+
+@app.route('/', methods=['GET', 'POST'])
 def index():
+    if request.method == 'POST':
+        # analyze 버튼 클릭 시 분석 결과 표시
+        image_url = request.form.get('image_url')
+        # 이미지 분석 로직 수행
 
-    # 버킷에 있는 모든 이미지 URL 가져오기
+        user_id = get_jwt_identity()
+        # 이미지 다운로드
+        image = download_image_from_storage(image_url)
+        if image is not None:
+            # 이미지를 640x640 크기로 변환
+            resized_image = image.resize((640, 640))
+            resized_image = resized_image.convert('RGB')
+
+            # 이미지 분석
+            results = model(resized_image)
+
+            # 분석 결과를 JSON 형태로 변환
+            result = result_to_json(image_to_base64(resized_image), results)
+
+            # 식물 이름 추출
+            plant_name = get_plant_name(result)
+            print(f"Plant Name: {plant_name} (User ID: {user_id})")
+
+            # 식물 정보와 사용자 아이디를 저장하는 코드 작성
+            if plant_name is not None:
+                new_plant = Plant(plt_name=plant_name, plt_img=None, user_id=user_id)
+                db.session.add(new_plant)
+                db.session.commit()
+                return redirect(url_for('result'))
+            else:
+                return {'message': 'Plant name is required'}, 400
+        else:
+            print("Plant name could not be determined.")
+            return {'message': 'Failed to analyze image'}, 400
+
+    # GET 요청일 때 이미지 URL 목록 표시
     image_urls = get_all_image_urls_from_bucket(bucket_name)
+    return render_template('index.html', image_urls=image_urls)
 
-    return render_template('test.html', image_urls=image_urls)
 
+@app.route('/result')
+def result():
+    return render_template('result.html')
+
+if __name__ == '__main__':
+    app.run(debug=True)
