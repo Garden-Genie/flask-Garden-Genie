@@ -1,13 +1,17 @@
 import os
 from datetime import datetime
-from flask import Flask
+from flask import Flask, request
 from flask_sqlalchemy import SQLAlchemy
 from dotenv import load_dotenv
+from flask_jwt_extended import JWTManager, jwt_required, create_access_token, get_jwt_identity
+
 
 load_dotenv()
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = os.getenv('SQLALCHEMY_TRACK_MODIFICATIONS')
+app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY')  # JWT 비밀 키 설정
+jwt = JWTManager(app)
 db = SQLAlchemy(app)
 
 class User(db.Model):
@@ -30,7 +34,7 @@ class Plant(db.Model):
 
     plt_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     plt_name = db.Column(db.String(20), nullable=False)
-    plt_img = db.Column(db.String(20), nullable=False)
+    plt_img = db.Column(db.String(255), nullable=False)
     user_id = db.Column(db.String(20), db.ForeignKey('User.user_id'), nullable=False)
 
     user = db.relationship('User', backref='plants')
@@ -65,3 +69,5 @@ class Story(db.Model):
         self.story_condition = story_condition
         self.user_id = user_id
         self.plt_id = plt_id
+
+
