@@ -1,10 +1,17 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Image Analyzer Result</title>
+    <title>Garden Genie - Result</title>
 </head>
 <body>
-    <h1>Image Analyzer Result</h1>
-    <p>Plant Name: {{ plant_name }}</p>
+    <h1>Garden Genie - Result</h1>
+    {% if plant_name %}
+        <h2>Result:</h2>
+        <p>Plant Name: {{ plant_name }}</p>
+        <p>User ID: {{ user_id }}</p>
+    {% else %}
+        <p>No Result.</p>
+    {% endif %}
+    <a href="/">main page</a>
 </body>
 </html>
