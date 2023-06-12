@@ -1,13 +1,24 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Image URLs</title>
+    <title>Garden Genie</title>
 </head>
 <body>
-    <h1>Image URLs:</h1>
+    <h1>Garden Genie</h1>
+    <form method="POST" action="/">
+        <label for="image_url">Image URL:</label>
+        <select id="image_url" name="image_url" required>
+            <option value="" selected disabled>Image URL Selection</option>
+            {% for image_url in image_urls %}
+                <option value="{{ image_url }}">{{ image_url }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit">Analyze</button>
+    </form>
+    <h2>Image URL Lists</h2>
     <ul>
-        {% for url in image_urls %}
-        <li>{{ url }}</li>
+        {% for image_url in image_urls %}
+            <li>{{ image_url }}</li>
         {% endfor %}
     </ul>
 </body>

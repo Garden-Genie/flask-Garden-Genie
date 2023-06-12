@@ -1,11 +1,14 @@
-from PIL import Image
 import os
+from PIL import Image
+import io
 from io import BytesIO
 import base64
 import json
+
+from conda_token.repo_config import validate_token
 from google.cloud import storage
 import torch
-from db_models import Plant, db
+from db_models import Plant, db, User
 from dotenv import load_dotenv
 from flask import Flask, request, render_template, jsonify, redirect, url_for
 from flask_jwt_extended import JWTManager, jwt_required, create_access_token, get_jwt_identity
@@ -110,22 +113,19 @@ def get_plant_name(result):
         return name
     return None
 
-@jwt_required()
 def save_result(plant_name, plt_img, user_id):
-    user_id = get_jwt_identity()  # 토큰에 포함된 사용자 아이디 가져오기
+    user = User.query.filter_by(user_id=user_id).first()  # 입력된 user_id에 해당하는 User 객체를 가져옴
+    if user is None:
+        return "Invalid user_id"  # 유효하지 않은 user_id인 경우 에러 메시지 반환
 
-    # 식물 정보와 사용자 아이디를 저장하는 코드 작성
-    if plant_name is not None:
-        new_plant = Plant(plt_name=plant_name, plt_img=plt_img, user_id=user_id)
-        db.session.add(new_plant)
-        db.session.commit()
-        return {'message': 'Result saved successfully'}
-    else:
-        return {'message': 'Plant name is required'}, 400
+    plant = Plant(plt_name=plant_name, plt_img=plt_img, user_id=user_id)
+    db.session.add(plant)
+    db.session.commit()
+    return "Plant information saved successfully"
 
 
-@jwt_required()
 @app.route('/analyze', methods=['POST'])
+@jwt_required()
 def analyze_image():
     user_id = get_jwt_identity()
     image_url = request.json.get('image_url')
