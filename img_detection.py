@@ -27,13 +27,13 @@ class_names = ['Clusia', 'Fan-Palms', 'Lvicks plant', 'Pachira', 'Wind orchid', 
                'poinsettia', 'ribbon plant']
 
 # GCS 클라이언트 초기화
-storage_client = storage.Client.from_service_account_json('D:/flask-Garden-Genie/garden-genie-key.json')
+storage_client = storage.Client.from_service_account_json('garden-genie-key.json')
 
 # 버킷 이름 설정
 bucket_name = 'garden_genie_image'
 
 # 모델 로드
-model_path = r'D:/sources-Garden-Genie/new_best.pt'
+model_path = 'new_best.pt'
 model = torch.hub.load('ultralytics/yolov5', 'custom', path=model_path, force_reload=True)
 
 # 이미지를 base64 문자열로 변환하는 함수
@@ -48,7 +48,7 @@ def result_to_json(image, results):
     unique_labels = set()  # 레이블 중복 제거
     labels = []
     if len(results.xyxy[0]) == 0:
-        result_dict = {"image": image, "name": "No object detected"}  # "label"을 "name"으로 변경
+        result_dict = {"image": image, "name": "No object detected"}
     else:
         result_dict = {"image": image, "name": ""}
         for result in results.xyxy[0]:
@@ -57,7 +57,7 @@ def result_to_json(image, results):
                 labels.append(label)
                 unique_labels.add(label)
         if labels:
-            result_dict["name"] = labels[0]  # "label"을 "name"으로 변경
+            result_dict["name"] = labels[0]
     return json.dumps(result_dict)
 
 # 버킷에 있는 모든 이미지의 URL 가져오기
@@ -108,15 +108,15 @@ def download_image_from_storage(image_url):
 # 분석 결과에서 식물 이름 추출
 def get_plant_name(result):
     data = json.loads(result)
-    name = data.get('name')  # "label"을 "name"으로 변경
-    if name is not None:
-        return name
-    return None
+    name = data.get('name')
+    if name is None:
+        return "none"
+    return name
 
 def save_result(plant_name, plt_img, user_id):
-    user = User.query.filter_by(user_id=user_id).first()  # 입력된 user_id에 해당하는 User 객체를 가져옴
+    user = User.query.filter_by(user_id=user_id).first()
     if user is None:
-        return "Invalid user_id"  # 유효하지 않은 user_id인 경우 에러 메시지 반환
+        return "Invalid user_id"
 
     plant = Plant(plt_name=plant_name, plt_img=plt_img, user_id=user_id)
     db.session.add(plant)

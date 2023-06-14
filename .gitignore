@@ -4,3 +4,4 @@ test_img.html
 gcp_models.py
 __pycache__
 .env
+new_best.pt
