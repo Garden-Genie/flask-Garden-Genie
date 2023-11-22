@@ -24,5 +24,9 @@ db.init_app(app)
 app.add_url_rule('/', 'index', index)
 app.add_url_rule('/analyze', 'analyze_image', analyze_image, methods=['POST'])
 
+# 데이터베이스 초기화
+with app.app_context():
+    db.create_all()
+
 if __name__ == '__main__':
     app.run(port=80)

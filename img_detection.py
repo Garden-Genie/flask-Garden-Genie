@@ -4,8 +4,9 @@ import io
 from io import BytesIO
 import base64
 import json
+import ultralytics
 
-from conda_token.repo_config import validate_token
+#from conda_token.repo_config import validate_token
 from google.cloud import storage
 import torch
 from db_models import Plant, db, User
@@ -34,7 +35,7 @@ bucket_name = 'garden_genie_image'
 
 # 모델 로드
 model_path = 'new_best.pt'
-model = torch.hub.load('ultralytics/yolov5', 'custom', path=model_path, force_reload=True)
+model = torch.hub.load('ultralytics/yolov5:v7.0', 'custom', path=model_path, force_reload=True)
 
 # 이미지를 base64 문자열로 변환하는 함수
 def image_to_base64(image):
@@ -206,6 +207,7 @@ def index():
 @app.route('/result')
 def result():
     return render_template('result.html')
+
 
 if __name__ == '__main__':
     app.run(debug=True)
